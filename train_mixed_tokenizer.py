@@ -22,6 +22,25 @@ def sample_from_unit_simplex(n, M=10000):
     return new_x
 
 
+def is_valid_unicode(data):
+    try:
+        data.decode('utf-8')
+        return True
+    except UnicodeDecodeError:
+        return False
+
+
+def truncate_file(filename, wanted_filesize):
+    with open(filename, 'rb') as f:
+        f.seek(wanted_filesize)
+        data = f.read(1)
+        while data and is_valid_unicode(data):
+            data = f.read(1)
+            wanted_filesize += 1
+    with open(filename, 'r+', encoding='utf-8') as fin:
+        fin.truncate(wanted_filesize)
+
+
 @click.command()
 @click.option(
     '--output_dir',
@@ -93,8 +112,9 @@ def main(
                 wanted_filesize = int(weight * total_bytes) - byte_counts[lang_code]
                 trunc_fname = f'{fname[:-4]}_truncated_{wanted_filesize}.txt'
                 os.system(f'cp {corpus_dir / lang_code / fname} {corpus_dir / lang_code / trunc_fname}')
-                with open(corpus_dir / lang_code / trunc_fname, 'a') as fin:
-                    fin.truncate(wanted_filesize)
+                truncate_file(corpus_dir / lang_code / trunc_fname, wanted_filesize)
+                # with open(corpus_dir / lang_code / trunc_fname, 'a') as fin:
+                #     fin.truncate(wanted_filesize)
                 text_files[lang_code].append(str(corpus_dir / lang_code / trunc_fname))
                 byte_counts[lang_code] += wanted_filesize
                 tqdm_bar.update(wanted_filesize)
@@ -106,10 +126,8 @@ def main(
     text_files = [f for lang_files in text_files.values() for f in lang_files]
     start_time = time.time()
     tokenizer = train_tokenizer_or_dump_frequencies(text_files)
-    print('line 109')
     print(f'Train time: {time.time() - start_time}', flush=True)
 
-    print('line 111')
     # write outputs!
     dirname = str(len(os.listdir(trained_tokenizers_dir)))
     ensure_dir(trained_tokenizers_dir / dirname)
