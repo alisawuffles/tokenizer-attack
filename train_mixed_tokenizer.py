@@ -34,7 +34,7 @@ def truncate_file(filename, wanted_filesize):
     with open(filename, 'rb') as f:
         f.seek(wanted_filesize)
         data = f.read(1)
-        while data and is_valid_unicode(data):
+        while data and not is_valid_unicode(data):
             data = f.read(1)
             wanted_filesize += 1
     with open(filename, 'r+', encoding='utf-8') as fin:
@@ -113,8 +113,6 @@ def main(
                 trunc_fname = f'{fname[:-4]}_truncated_{wanted_filesize}.txt'
                 os.system(f'cp {corpus_dir / lang_code / fname} {corpus_dir / lang_code / trunc_fname}')
                 truncate_file(corpus_dir / lang_code / trunc_fname, wanted_filesize)
-                # with open(corpus_dir / lang_code / trunc_fname, 'a') as fin:
-                #     fin.truncate(wanted_filesize)
                 text_files[lang_code].append(str(corpus_dir / lang_code / trunc_fname))
                 byte_counts[lang_code] += wanted_filesize
                 tqdm_bar.update(wanted_filesize)
