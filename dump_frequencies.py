@@ -32,11 +32,11 @@ import json
     help='Use this when applying merges from a commercial tokenizer.'
 )
 @click.option(
-    '--max_files',
+    '--num_bytes',
     type=int,
-    default=4
+    default=10**9
 )
-def main(experiment_dir: str, lang_code: str, corpus_dir: str, model_name: str, max_files: int):
+def main(experiment_dir: str, lang_code: str, corpus_dir: str, model_name: str, num_bytes: int):
     corpus_dir = Path(corpus_dir)
     experiment_dir = Path(experiment_dir)
     os.chdir('/gscratch/xlab/alisaliu/hack-tokenizers')
@@ -50,21 +50,31 @@ def main(experiment_dir: str, lang_code: str, corpus_dir: str, model_name: str, 
     print('Initializing tokenizer...', flush=True)
 
     # get text data
-    text_files = [str(corpus_dir / lang_code / f) for f in os.listdir(corpus_dir / lang_code) if f.endswith('txt') ]
-    random.shuffle(text_files)
-    text_files = text_files[:max_files]
+    all_text_files = [str(corpus_dir / lang_code / f) for f in os.listdir(corpus_dir / lang_code) if f.endswith('txt') ]
+    random.shuffle(all_text_files)
+    byte_count = 0
+    text_files = []
+    # keep reading text files until we have num_bytes
+    while byte_count < num_bytes:
+        fname = all_text_files.pop()
+        filesize = os.path.getsize(corpus_dir / lang_code / fname)
+        if filesize < num_bytes:
+            text_files.append(str(corpus_dir / lang_code / fname))
+            byte_count += filesize
+        else:
+            wanted_filesize = num_bytes - byte_count
+            trunc_fname = f'{fname[:-4]}_truncated_{wanted_filesize}.txt'
+            os.system(f'cp {corpus_dir / lang_code / fname} {corpus_dir / lang_code / trunc_fname}')
+            with open(corpus_dir / lang_code / trunc_fname, 'a') as fin:
+                fin.truncate(wanted_filesize)
+            text_files.append(str(corpus_dir / lang_code / trunc_fname))
+            byte_count += wanted_filesize
     print(f'Loaded {len(text_files)} text files!', flush=True)
 
-    # count chars bc Jon wants them
-    char_count = 0
-    for fin in text_files:
-        with open(fin, 'r') as f:
-            char_count += len(f.read())
-
     ensure_dir(lang_code)
-    with open(f'{lang_code}/config.json', 'w') as fo:
+    with open(f'{lang_code}/meta.json', 'w') as fo:
         config = {}
-        config['char_count'] = char_count
+        config['byte_count'] = byte_count
         config['text_files'] = text_files
         json.dump(config, fo, indent=5)
 
