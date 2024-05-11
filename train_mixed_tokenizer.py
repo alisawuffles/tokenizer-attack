@@ -81,10 +81,10 @@ def main(
         language_files = [f for f in os.listdir(corpus_dir / lang_code) if f.endswith('.txt') and 'truncated' not in f]
         random.shuffle(language_files)
         counter = 0
-        while byte_counts[lang_code] < weight * total_bytes:
+        while byte_counts[lang_code] < int(weight * total_bytes):
             fname = language_files[counter % len(language_files)]
             filesize = os.path.getsize(corpus_dir / lang_code / fname)
-            if filesize < weight * total_bytes:
+            if byte_counts[lang_code] + filesize <= weight * total_bytes:
                 text_files[lang_code].append(str(corpus_dir / lang_code / fname))
                 byte_counts[lang_code] += filesize
                 tqdm_bar.update(filesize)
@@ -106,8 +106,10 @@ def main(
     text_files = [f for lang_files in text_files.values() for f in lang_files]
     start_time = time.time()
     tokenizer = train_tokenizer_or_dump_frequencies(text_files)
+    print('line 109')
     print(f'Train time: {time.time() - start_time}', flush=True)
 
+    print('line 111')
     # write outputs!
     dirname = str(len(os.listdir(trained_tokenizers_dir)))
     ensure_dir(trained_tokenizers_dir / dirname)
