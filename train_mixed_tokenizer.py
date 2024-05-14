@@ -7,7 +7,7 @@ import random
 from collections import defaultdict, Counter
 from tqdm import tqdm
 import click
-from utils import train_tokenizer_or_dump_frequencies
+from utils import train_tokenizer_or_dump_frequencies, truncate_file
 
 
 def sample_from_unit_simplex(n, M=10000):
@@ -22,31 +22,11 @@ def sample_from_unit_simplex(n, M=10000):
     return new_x
 
 
-def is_valid_unicode(data):
-    try:
-        data.decode('utf-8')
-        return True
-    except UnicodeDecodeError:
-        return False
-
-
-def truncate_file(filename, wanted_filesize):
-    with open(filename, 'rb') as f:
-        f.seek(wanted_filesize)
-        data = f.read(1)
-        while data and not is_valid_unicode(data):
-            data = f.read(1)
-            wanted_filesize += 1
-    with open(filename, 'r+', encoding='utf-8') as fin:
-        fin.truncate(wanted_filesize)
-
-
 @click.command()
 @click.option(
     '--output_dir',
     type=str,
-    default='data/mixed_languages',
-    help='Where to save trained tokenizers.'
+    help='Where to save trained tokenizers, e.g., data/mixed_languages/n_10/0.'
 )
 @click.option(
     '--num_languages',
@@ -72,79 +52,110 @@ def truncate_file(filename, wanted_filesize):
     default=False,
     help="Whether to use only the set of languages available in RedPajama's wikipedia split."
 )
+@click.option(
+    '--size_threshold',
+    type=int,
+    default=None,
+    help='If specified, we will only use languages with byte counts above this threshold.'
+)
 def main(
     output_dir: str,
     num_languages: int,
     total_bytes: int,
     corpus_dir: str,
-    use_wiki_languages: bool
+    use_wiki_languages: bool,
+    size_threshold: int
 ):
     corpus_dir = Path(corpus_dir)
-    trained_tokenizers_dir = Path(f'{output_dir}/n_{num_languages}')
-    ensure_dir(trained_tokenizers_dir)
+    output_dir = Path(output_dir)
+    ensure_dir(output_dir)
+    print(f'We are training a tokenizer for {output_dir}', flush=True)
 
-    if not use_wiki_languages:
-        languages = random.sample(os.listdir(corpus_dir), num_languages)
+    # If meta.json exists, use the languages and weights from there.
+    if os.path.exists(output_dir / 'meta.json'):
+        print('Output directory contains meta.json, so we will use the languages and weights from there.', flush=True)
+        meta = json.load(open(output_dir / 'meta.json'))
+        byte_counts = meta['byte_count']
+        languages = byte_counts.keys()
+        weights = [v / sum(byte_counts.values()) for v in byte_counts.values()]
+        train_files = meta['train_files']
+        text_files_ok = all([os.path.exists(f) for f in train_files])
+        if text_files_ok:
+            text_files = []
+            for item, count in train_files.items():
+                text_files.extend([item] * count)
+
+    # Else, sample languages and weights.
     else:
-        print('Using only languages available in RedPajama wikipedia split.', flush=True)
-        languages = random.sample(os.listdir('/gscratch/scrubbed/alisaliu/redpajama/wikipedia/processed'), num_languages)
+        text_files_ok = False
+        if use_wiki_languages:
+            print('Using only languages available in RedPajama wikipedia split.', flush=True)
+            languages = random.sample(os.listdir('/gscratch/scrubbed/alisaliu/redpajama/wikipedia/processed'), num_languages)
+        elif size_threshold:
+            from constants import LANG_SIZES
+            all_languages = [lang for lang, size in LANG_SIZES.items() if size > size_threshold]
+            languages = random.sample(all_languages, num_languages)
+            print(f'Using the {len(all_languages)} languages with at least {size_threshold} bytes of text.', flush=True)
+        else:
+            languages = random.sample(os.listdir(corpus_dir), num_languages)
 
-    weights = sample_from_unit_simplex(len(languages))
-    print(f'Intended language distribution: {({l: w for l, w in zip(languages, weights)})}', flush=True)
+        weights = sample_from_unit_simplex(len(languages))
+        print(f'Intended language distribution: {({l: w for l, w in zip(languages, weights)})}', flush=True)
 
-    tqdm_bar = tqdm(total=total_bytes, desc='Loading text data')
-    text_files, byte_counts = defaultdict(list), defaultdict(int)
+    if not text_files_ok:
+        tqdm_bar = tqdm(total=total_bytes, desc='Loading text data')
+        text_files, byte_counts = defaultdict(list), defaultdict(int)
 
-    # get text data for each language, duplicating as necessary until byte_counts for each language is met
-    for lang_code, weight in zip(languages, weights):
-        language_files = [f for f in os.listdir(corpus_dir / lang_code) if f.endswith('.txt') and 'truncated' not in f]
-        random.shuffle(language_files)
-        counter = 0
-        while byte_counts[lang_code] < int(weight * total_bytes):
-            fname = language_files[counter % len(language_files)]
-            filesize = os.path.getsize(corpus_dir / lang_code / fname)
-            if byte_counts[lang_code] + filesize <= weight * total_bytes:
-                text_files[lang_code].append(str(corpus_dir / lang_code / fname))
-                byte_counts[lang_code] += filesize
-                tqdm_bar.update(filesize)
-            else:
-                # make a copy, then truncate file to desired size
-                wanted_filesize = int(weight * total_bytes) - byte_counts[lang_code]
-                trunc_fname = f'{fname[:-4]}_truncated_{wanted_filesize}.txt'
-                os.system(f'cp {corpus_dir / lang_code / fname} {corpus_dir / lang_code / trunc_fname}')
-                truncate_file(corpus_dir / lang_code / trunc_fname, wanted_filesize)
-                text_files[lang_code].append(str(corpus_dir / lang_code / trunc_fname))
-                byte_counts[lang_code] += wanted_filesize
-                tqdm_bar.update(wanted_filesize)
-            counter += 1
+        # get text data for each language, duplicating as necessary until byte_counts for each language is met
+        for lang_code, weight in zip(languages, weights):
+            language_files = [f for f in os.listdir(corpus_dir / lang_code) if f.endswith('.txt') and 'truncated' not in f]
+            random.shuffle(language_files)
+            counter = 0
+            while byte_counts[lang_code] < int(weight * total_bytes):
+                fname = language_files[counter % len(language_files)]
+                filesize = os.path.getsize(corpus_dir / lang_code / fname)
+                if byte_counts[lang_code] + filesize <= weight * total_bytes:
+                    text_files[lang_code].append(str(corpus_dir / lang_code / fname))
+                    byte_counts[lang_code] += filesize
+                    tqdm_bar.update(filesize)
+                else:
+                    # make a copy, then truncate file to desired size
+                    wanted_filesize = int(weight * total_bytes) - byte_counts[lang_code]
+                    trunc_fname = f'{fname[:-4]}_truncated_{wanted_filesize}.txt'
+                    os.system(f'cp {corpus_dir / lang_code / fname} {corpus_dir / lang_code / trunc_fname}')
+                    truncate_file(corpus_dir / lang_code / trunc_fname, wanted_filesize)
+                    text_files[lang_code].append(str(corpus_dir / lang_code / trunc_fname))
+                    byte_counts[lang_code] += wanted_filesize
+                    tqdm_bar.update(wanted_filesize)
+                counter += 1
+
+        # Write metadata
+        text_files = [f for lang_files in text_files.values() for f in lang_files]
+        with open(output_dir / 'meta.json', 'w') as fo:
+            meta = {}
+            meta['byte_count'] = byte_counts
+            meta['total_bytes'] = total_bytes
+            meta['train_files'] = Counter(text_files)
+            json.dump(meta, fo, indent=5)
 
     print(f'Real language distribution: {byte_counts}', flush=True)
 
+    # Train tokenizer
     print('Training tokenizer...', flush=True)
-    text_files = [f for lang_files in text_files.values() for f in lang_files]
     start_time = time.time()
     tokenizer = train_tokenizer_or_dump_frequencies(text_files)
     print(f'Train time: {time.time() - start_time}', flush=True)
 
-    # write outputs!
-    dirname = str(len(os.listdir(trained_tokenizers_dir)))
-    ensure_dir(trained_tokenizers_dir / dirname)
-    tokenizer.model.save(str(trained_tokenizers_dir / dirname))
+    # Save tokenizer!
+    tokenizer.model.save(str(output_dir))
 
-    with open(trained_tokenizers_dir / dirname / 'meta.json', 'w') as fo:
-        config = {}
-        config['byte_count'] = byte_counts
-        config['total_bytes'] = total_bytes
-        config['train_files'] = Counter(text_files)
-        json.dump(config, fo, indent=5)
-
-    # create an empty directory for each language (this will be helpful later)
+    # Create an empty directory for each language (this will be helpful later)
     for lang_code in languages:
-        ensure_dir(trained_tokenizers_dir / dirname / lang_code)
+        ensure_dir(output_dir / lang_code)
 
-    print('Tokenizer info saved to ' + str(trained_tokenizers_dir / dirname), flush=True)
+    print('Tokenizer info saved to ' + str(output_dir), flush=True)
 
-    # delete files that were constructed just for this
+    # Delete files that were constructed just for this
     for f in text_files:
         if 'truncated' in f:
             os.remove(f)
