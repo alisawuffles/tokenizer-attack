@@ -1,13 +1,12 @@
 import os
 from pathlib import Path
 import time
-from utils import ensure_dir
 import json
 import random
 from collections import defaultdict, Counter
 from tqdm import tqdm
 import click
-from utils import train_tokenizer_or_dump_frequencies, truncate_file
+from utils import ensure_dir, truncate_file
 
 
 def sample_from_unit_simplex(n, M=10000):
@@ -27,6 +26,12 @@ def sample_from_unit_simplex(n, M=10000):
     '--output_dir',
     type=str,
     help='Where to save trained tokenizers, e.g., data/mixed_languages/n_10/0.'
+)
+@click.option(
+    '--use_spm',
+    type=bool,
+    default=False,
+    help='Whether to use SentencePiece library for training. Default is tokenizers.'
 )
 @click.option(
     '--num_languages',
@@ -60,6 +65,7 @@ def sample_from_unit_simplex(n, M=10000):
 )
 def main(
     output_dir: str,
+    use_spm: bool,
     num_languages: int,
     total_bytes: int,
     corpus_dir: str,
@@ -90,7 +96,7 @@ def main(
         text_files_ok = False
         if use_wiki_languages:
             print('Using only languages available in RedPajama wikipedia split.', flush=True)
-            languages = random.sample(os.listdir('/gscratch/scrubbed/alisaliu/redpajama/wikipedia/processed'), num_languages)
+            languages = random.sample(os.listdir('/gscratch/scrubbed/alisaliu/redpajama/wikipedia'), num_languages)
         elif size_threshold:
             from constants import LANG_SIZES
             all_languages = [lang for lang, size in LANG_SIZES.items() if size > size_threshold]
@@ -141,13 +147,19 @@ def main(
     print(f'Real language distribution: {byte_counts}', flush=True)
 
     # Train tokenizer
-    print('Training tokenizer...', flush=True)
     start_time = time.time()
-    tokenizer = train_tokenizer_or_dump_frequencies(text_files)
-    print(f'Train time: {time.time() - start_time}', flush=True)
 
-    # Save tokenizer!
-    tokenizer.model.save(str(output_dir))
+    if not use_spm:
+        from utils import train_tokenizer_or_dump_frequencies
+        print('Training with HF tokenizers...')
+        tokenizer = train_tokenizer_or_dump_frequencies(text_files)
+        tokenizer.model.save(str(output_dir))
+    else:
+        from utils import train_tokenizer_spm
+        print('Training with SentencePiece...')
+        train_tokenizer_spm(text_files, output_dir)
+
+    print(f'Train time: {time.time() - start_time}', flush=True)
 
     # Create an empty directory for each language (this will be helpful later)
     for lang_code in languages:
