@@ -1,0 +1,39 @@
+[project]
+name = "tokenizer-attack"
+version = "1.0"
+description = "BPE data mixture inference"
+authors = [
+    {name = "Jonathan Hayase", email = "jhayase@cs.washington.edu"},
+]
+dependencies = [
+    "numpy>=1.26.4",
+    "gurobipy>=11.0.1",
+    "matplotlib>=3.8.4",
+    "seaborn>=0.13.2",
+    "jupyterlab-code-formatter>=2.2.1",
+    "tiktoken>=0.6.0",
+    "pysimdjson>=6.0.2",
+    "tqdm>=4.66.4",
+    "transformers>=4.40.1",
+    "scipy>=1.13.0",
+    "jax>=0.4.28",
+    "jaxlib>=0.4.28",
+    "sentencepiece>=0.2.0",
+    "protobuf>=5.26.1",
+    "prqrs @ git+https://github.com/PythonNut/prqrs",
+    "flash-attn>=2.6.3",
+]
+requires-python = ">=3.12"
+readme = "README.md"
+license = {text = "MIT"}
+
+[tool.pdm.dev-dependencies]
+dev = [
+    "nbclassic>=1.0.0",
+    "jupyter>=1.0.0",
+    "jupyterlab>=4.1.6",
+    "ipython>=8.23.0",
+    "black>=24.4.1",
+    "isort>=5.13.2",
+    "python-lsp-server>=1.11.0",
+]
