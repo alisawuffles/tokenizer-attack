@@ -2,18 +2,16 @@ import argparse
 import bisect
 import sys
 import time
-from copy import deepcopy
 from functools import partial
 from pathlib import Path
 
 import gurobipy as gp
-import matplotlib.pyplot as plt
 import numpy as np
 import simdjson as json
 import tqdm.auto as tqdm
 from gurobipy import GRB
 
-from prqrs import Item, PriorityQueue
+from prqrs import PriorityQueue
 from utils import load_data
 
 
@@ -32,7 +30,7 @@ def lazy_optimize(
     num_langs = len(pair_counts)
     merge_subset = [str(merge) for merge in merges[:num_merges]]
     P = partial(tqdm.tqdm, dynamic_ncols=True) if verbose else lambda x, **_: x
-    ## precomputation step
+    # precomputation step
     if verbose:
         print("precomputation")
 
@@ -188,7 +186,7 @@ def lazy_optimize(
                     popped.append(item)
                     active_set[i].append((item.value, item.priority))
                     if tprio > cutoff:
-                        assert tid != mid, f"{tprio} {pair_viol_vals.get(top, 0)}"
+                        assert tid != mid, f"{tprio} {pair_viol_vals.get(item, 0)}"
                         if (i, tid) not in all_constraints:
                             candidates.add(tid)
                     else:
@@ -202,7 +200,7 @@ def lazy_optimize(
 
                 cand_counts = {
                     cand: np.array(
-                        [get_cur_count(i, l, cand) / lang_denoms[l] for l in langs]
+                        [get_cur_count(i, lang, cand) / lang_denoms[lang] for lang in langs]
                     )
                     for cand in candidates
                 }
