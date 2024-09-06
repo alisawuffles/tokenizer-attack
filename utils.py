@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import heapq
 import itertools
-import json
 import os
 from dataclasses import dataclass, field
 from functools import partial
@@ -12,116 +11,14 @@ from typing import Dict, List, Optional, Tuple
 import simdjson as json
 import tqdm.auto as tqdm
 from sentencepiece import SentencePieceProcessor
-from tokenizers import Regex, Tokenizer, pre_tokenizers
 from tokenizers.models import BPE
-from tokenizers.normalizers import NFKC
-from tokenizers.pre_tokenizers import ByteLevel, Digits, Metaspace, Split
+
+from tokenizers import Tokenizer, pre_tokenizers
+from tokenizers.pre_tokenizers import Digits, ByteLevel
 from tokenizers.trainers import BpeTrainer
-from tqdm import tqdm, trange
+from constants import BASE_VOCABS, LLM_LANGS
+from llm_tokenizer_configs import LLM_NORMALIZERS, LLM_PRETOKENIZERS
 
-from constants import LLAMA_BASE_VOCAB
-
-llm_normalizers = {"claude": NFKC()}
-
-
-llm_pretokenizers = {
-    "bloom": pre_tokenizers.Sequence(
-        [
-            Split(
-                pattern=Regex(" ?[^(\\s|[.,!?…。，、।۔،])]+"),
-                behavior="isolated",
-                invert=False,
-            ),
-            ByteLevel(add_prefix_space=False, trim_offsets=True, use_regex=False),
-        ]
-    ),
-    "llama": pre_tokenizers.Sequence(
-        [
-            Split(
-                pattern=Regex(" ?[^\\s\\p{L}\\p{N}]+\\r*"),
-                behavior="isolated",
-                invert=False,
-            ),
-            Metaspace(replacement="▁", prepend_scheme="first"),
-            Digits(individual_digits=True),
-            Split(
-                pattern="\n", behavior="removed"
-            ),  # \n and \t never merged with anything
-            Split(pattern="\t", behavior="removed"),
-        ]
-    ),
-    "llama3": pre_tokenizers.Sequence(
-        [
-            Split(
-                pattern=Regex(
-                    "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}T| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
-                ),
-                behavior="isolated",
-                invert=False,
-            ),
-            ByteLevel(add_prefix_space=False, trim_offsets=True, use_regex=False),
-        ]
-    ),
-    "gpt2": ByteLevel(add_prefix_space=False, trim_offsets=True, use_regex=True),
-    "gpt3": ByteLevel(add_prefix_space=False, trim_offsets=True, use_regex=True),
-    "gpt3.5": pre_tokenizers.Sequence(
-        [
-            Split(
-                pattern=Regex(
-                    "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
-                ),
-                behavior="removed",
-                invert=True,
-            ),
-            ByteLevel(add_prefix_space=False, trim_offsets=True, use_regex=False),
-        ]
-    ),
-    "gpt4o": pre_tokenizers.Sequence(
-        [
-            Split(
-                pattern=Regex(
-                    "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]*[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]+(?i:'s|'t|'re|'ve|'m|'ll|'d)?|[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]+[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]*(?i:'s|'t|'re|'ve|'m|'ll|'d)?|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n/]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
-                ),
-                behavior="removed",
-                invert=True,
-            ),
-            ByteLevel(add_prefix_space=False, trim_offsets=True, use_regex=False),
-        ]
-    ),
-    "gemma": pre_tokenizers.Sequence(
-        [
-            Split(
-                pattern=Regex(" ?[^\\s\\p{L}\\p{N}]+\\r*"),
-                behavior="isolated",
-                invert=False,
-            ),
-            Metaspace(prepend_scheme="never"),
-            Digits(individual_digits=True),
-            Split(pattern="\n", behavior="removed"),
-            Split(pattern="\t", behavior="removed"),
-        ]
-    ),
-    "commandr": pre_tokenizers.Sequence(
-        [
-            Digits(individual_digits=True),
-            ByteLevel(add_prefix_space=False, trim_offsets=True, use_regex=True),
-        ]
-    ),
-    "mixtral": pre_tokenizers.Sequence(
-        [
-            Split(
-                pattern=Regex(" ?[^\\s\\p{L}\\p{N}]+\\r*"),
-                behavior="isolated",
-                invert=False,
-            ),
-            Metaspace(prepend_scheme="first"),
-            Digits(individual_digits=True),
-            Split(pattern="\n", behavior="removed"),
-            Split(pattern="\t", behavior="removed"),
-        ]
-    ),
-    "claude": ByteLevel(add_prefix_space=False, trim_offsets=True, use_regex=True),
-}
 
 
 def ensure_dir(d):
@@ -129,9 +26,16 @@ def ensure_dir(d):
         os.makedirs(d, exist_ok=True)
 
 
+def read_json(file):
+    return json.load(open(file))
+
+
+def read_predictions(solution_file):
+    return read_json(solution_file)['lang_vals']
+
+
 def read_tokenizer_json(path_to_json):
-    with open(path_to_json, "r") as fin:
-        tokenizer_json = json.load(fin)
+    tokenizer_json = read_json(path_to_json)
 
     return {
         "vocab": tokenizer_json["model"]["vocab"],
@@ -146,18 +50,16 @@ def read_merges_txt(path_to_txt):
     return merges
 
 
-def get_size_cpe(text):
+def count_chars(text, model_name=None):
     """
     For tokenizers that are really *character*-pair encoding, we need to get the size in terms of the base vocabulary.
     If a character is in the base vocabulary, that adds 1 to the size. Else, it is the number of bytes.
     """
-    size = 0
+    num_chars = 0
     for t in text:
-        if t in LLAMA_BASE_VOCAB:
-            size += 1
-        else:
-            size += len(t.encode("utf8"))
-    return size
+        if t in BASE_VOCABS[model_name]:
+            num_chars += 1
+    return num_chars
 
 
 def train_tokenizer_or_dump_frequencies(text_files: str, model_name=None):
@@ -172,11 +74,11 @@ def train_tokenizer_or_dump_frequencies(text_files: str, model_name=None):
             ]
         )
     else:
-        print(f"Using config of {model_name}")
-        if model_name in llm_normalizers:
-            tokenizer.normalizer = llm_normalizers[model_name]
-        if model_name in llm_pretokenizers:
-            tokenizer.pre_tokenizer = llm_pretokenizers[model_name]
+        print(f'Using config of {model_name}')
+        if model_name in LLM_NORMALIZERS:
+            tokenizer.normalizer = LLM_NORMALIZERS[model_name]
+        if model_name in LLM_PRETOKENIZERS:
+            tokenizer.pre_tokenizer = LLM_PRETOKENIZERS[model_name]
         else:
             raise ValueError(f"Unknown model name: {model_name}")
 
@@ -186,28 +88,29 @@ def train_tokenizer_or_dump_frequencies(text_files: str, model_name=None):
 
 
 def train_tokenizer_spm(text_files, output_dir):
-    from os import linesep
-
     import sentencepiece as spm
-
     from utils import SentencePieceExtractor
+    from os import linesep
+    from clean_unused_merges import clean_merges
 
-    ensure_dir(output_dir / "spm")
     spm.SentencePieceTrainer.train(
         input=text_files,
-        model_prefix=str(output_dir / "spm/m"),
+        model_prefix=str(output_dir / 'spm'),
         vocab_size=30000,
-        character_coverage=0.9995,
-        model_type="bpe",
+        character_coverage=0.995,
+        model_type='bpe',
         num_threads=32,
         train_extremely_large_corpus=True,
+        byte_fallback=True,
+        split_digits=True,
+        add_dummy_prefix=True
     )
 
-    sp = spm.SentencePieceProcessor()
-    sp.load(str(output_dir / "spm/m.model"))
-    extractor = SentencePieceExtractor(model="data/test_spm/m.model")
+    extractor = SentencePieceExtractor(model=str(output_dir / 'spm.model'))
     vocab, merges = extractor.extract()
-    with open(output_dir / "vocab.json", "w") as vocab_f:
+    merges = clean_merges(merges)
+
+    with open(output_dir / 'vocab.json', 'w') as vocab_f:
         json.dump(vocab, vocab_f)
     with open(output_dir / "merges.txt", "w") as merges_f:
         merges_f.write(f"# trained with SentencePiece{linesep}")
@@ -223,21 +126,24 @@ def is_valid_unicode(data):
 
 
 def truncate_file(filename, wanted_filesize):
+    """
+    This truncates filename to wanted_filesize. Note this overwrites filename!!
+    """
     if os.path.getsize(filename) < wanted_filesize:
         raise ValueError("File is already smaller than desired filesize")
 
+    # adjust wanted_filesize to the next valid unicode character
     with open(filename, "rb") as f:
         f.seek(wanted_filesize)
         data = f.read(1)
         while data and not is_valid_unicode(data):
             data = f.read(1)
             wanted_filesize += 1
+
     with open(filename, "r+", encoding="utf-8") as fin:
         fin.truncate(wanted_filesize)
 
-    # if we ever need to rerun all our experiments (god forbid), we should return the actual
-    # filesized used and record that instead
-    # return wanted_filesize
+    return wanted_filesize
 
 
 class SentencePieceExtractor:
@@ -253,7 +159,7 @@ class SentencePieceExtractor:
 
     def extract(self) -> Tuple[Dict[str, int], List[Tuple]]:
         sp = self.sp
-        vocab = {sp.id_to_piece(index): index for index in trange(sp.GetPieceSize())}
+        vocab = {sp.id_to_piece(index): index for index in tqdm.trange(sp.GetPieceSize())}
 
         # Merges
         merges = []
@@ -267,209 +173,6 @@ class SentencePieceExtractor:
         merges = [(val[0], val[1]) for val in merges]
 
         return vocab, merges
-
-
-CODE_LANGS = [
-    "Fortran",
-    "Perl",
-    "Motorola68KAssembly",
-    "Ruby",
-    "XML",
-    "reStructuredText",
-    "PowerShell",
-    "Batchfile",
-    "Smali",
-    "VisualBasic.NET",
-    "Pod6",
-    "Makefile",
-    "Lua",
-    "JavaScript",
-    "Hack",
-    "Scala",
-    "HTML",
-    "XPixMap",
-    "Python",
-    "PHP",
-    "CMake",
-    "TSQL",
-    "Haskell",
-    "C++",
-    "C",
-    "CSS",
-    "Dockerfile",
-    "Objective-C",
-    "Raku",
-    "Java",
-    "Smalltalk",
-    "FortranFreeForm",
-    "Shell",
-    "TeX",
-    "Julia",
-    "Markdown",
-    "Go",
-]
-DOMAIN_LANGS = ["arxiv", "books", "github", "web", "wikipedia"]
-OTHER_LANGS = [
-    "fy",
-    "sah",
-    "ga",
-    "sa",
-    "os",
-    "cv",
-    "ceb",
-    "af",
-    "br",
-    "azb",
-    "hr",
-    "mhr",
-    "lb",
-    "uz",
-    "ce",
-    "mg",
-    "nds",
-    "xmf",
-    "bpy",
-    "new",
-    "min",
-    "arz",
-    "nn",
-    "tk",
-    "pms",
-    "ms",
-    "gom",
-    "la",
-    "jbo",
-    "mt",
-    "sw",
-]
-DO_COUNT_CHARS = {
-    "gpt2": False,
-    "gpt3": False,
-    "gpt3.5": False,
-    "gpt4o": False,
-    "llama": True,
-    "llama3": False,
-    "mixtral": True,
-    "gemma": True,
-}
-LLM_LANGS = [
-    "fa",
-    "as",
-    "no",
-    "hi",
-    "ur",
-    "mr",
-    "tr",
-    "jbo",
-    "ar",
-    "ps",
-    "mn",
-    "pnb",
-    "arz",
-    "lv",
-    "tt",
-    "ne",
-    "sq",
-    "sw",
-    "bpy",
-    "min",
-    "sk",
-    "dv",
-    "ms",
-    "fy",
-    "azb",
-    "gom",
-    "sa",
-    "new",
-    "sd",
-    "ka",
-    "or",
-    "pa",
-    "bn",
-    "my",
-    "ta",
-    "bo",
-    "he",
-    "ml",
-    "yi",
-    "si",
-    "te",
-    "ckb",
-    "gu",
-    "kn",
-    "ug",
-    "ceb",
-    "ky",
-    "xmf",
-    "hy",
-    "tk",
-    "el",
-    "mhr",
-    "lt",
-    "km",
-    "lo",
-    "sah",
-    "zh",
-    "os",
-    "ku",
-    "la",
-    "ba",
-    "th",
-    "hr",
-    "kk",
-    "eu",
-    "mt",
-    "az",
-    "tg",
-    "am",
-    "uz",
-    "is",
-    "ce",
-    "vi",
-    "et",
-    "cv",
-    "tl",
-    "mg",
-    "id",
-    "pms",
-    "mk",
-    "br",
-    "lb",
-    "cy",
-    "hu",
-    "ko",
-    "be",
-    "ga",
-    "af",
-    "sl",
-    "fi",
-    "bg",
-    "eo",
-    "nn",
-    "da",
-    "gl",
-    "ja",
-    "ro",
-    "sr",
-    "nds",
-    "cs",
-    "sv",
-    "ca",
-    "pt",
-    "nl",
-    "uk",
-    "pl",
-    "it",
-    "ru",
-    "es",
-    "de",
-    "fr",
-    "wikipedia",
-    "arxiv",
-    "web",
-    "github",
-    "books",
-]
 
 
 def bytes_to_unicode():
@@ -645,9 +348,6 @@ def load_data(data_root, verbose=False, subdir=None, langlist=None):
         if data_root.parent.name.startswith("llm") and (
             item.name
             not in LLM_LANGS
-            # item.name in CODE_LANGS
-            # # or item.name in OTHER_LANGS
-            # or item.name in ["code", "en", "wikipedia_uncleaned", "c4", "other"]
         ):
             continue
 
@@ -655,13 +355,6 @@ def load_data(data_root, verbose=False, subdir=None, langlist=None):
         if subdir is not None:
             item = item / subdir
 
-        # if (
-        #     item.name in CODE_LANGS
-        #     or item.name in OTHER_LANGS
-        #     or (item.name in DOMAIN_LANGS and item.name != "github")
-        #     or item.name == "code"
-        # ):
-        #     continue
         with (item / "all_pair_counts.json").open() as f:
             pair_counts[lang] = json.load(f)
 
@@ -677,3 +370,53 @@ def load_data(data_root, verbose=False, subdir=None, langlist=None):
 
     print(training_counts.keys())
     return merges, pair_counts, training_counts
+
+
+def get_pair_to_byte_ratios(ex_dir, num_bytes=None):
+    pair_to_byte_ratio = {}
+    meta = read_json(ex_dir / 'meta.json')
+
+    for lang in meta['byte_count'].keys():
+        # if the byte_count is different from default, the directory structure is a little different
+        if num_bytes:
+            lang_dir = Path(lang) / "{:.0e}".format(num_bytes).replace("e+", "e")
+        else:
+            lang_dir = lang
+
+        lang_meta = read_json(ex_dir / lang_dir / 'meta.json')
+
+        if 'pairs' in lang_meta:
+            num_pairs = lang_meta['pairs']
+        else:
+            num_pairs = sum(read_json(ex_dir / lang_dir / 'all_pair_counts.json')[0].values())
+            lang_meta['pairs'] = num_pairs
+
+            # replace meta.json to include pair count
+            with open(ex_dir / lang_dir / 'meta.json', 'w') as fo:
+                json.dump(lang_meta, fo, indent=5)
+
+        pair_to_byte_ratio[lang] = lang_meta['byte_count'] / num_pairs
+
+    return pair_to_byte_ratio
+
+
+def score_solution(test_dir, solution_file, num_bytes=None):
+    """
+    Return MSE for the given solution file, converting the predictions from pair counts to byte counts.
+    """
+    preds = read_predictions(test_dir / solution_file)
+    meta = read_json(test_dir / 'meta.json')
+    truth = {k: v / sum(meta['byte_count'].values()) for k, v in meta['byte_count'].items()}
+    pair_to_byte_ratio = get_pair_to_byte_ratios(test_dir, num_bytes=num_bytes)
+
+    converted_preds = {}
+    for lang, p in preds.items():
+        converted_preds[lang] = p * pair_to_byte_ratio[lang]
+    converted_preds = {k: v / sum(converted_preds.values()) for k, v in converted_preds.items()}
+
+    return mse(truth, converted_preds)
+
+
+def mse(true, pred):
+    return sum((pred[lang] - true[lang]) ** 2 for lang in true.keys()) / len(true)
+
