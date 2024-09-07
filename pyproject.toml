@@ -14,18 +14,19 @@ dependencies = [
     "tiktoken>=0.6.0",
     "pysimdjson>=6.0.2",
     "tqdm>=4.66.4",
-    "transformers>=4.40.1",
     "scipy>=1.13.0",
-    "jax>=0.4.28",
-    "jaxlib>=0.4.28",
     "sentencepiece>=0.2.0",
     "protobuf>=5.26.1",
     "prqrs @ git+https://github.com/PythonNut/prqrs",
-    "flash-attn>=2.6.3",
+    "torch>=2.4.1",
+    "tokenizers @ git+https://github.com/alisawuffles/tokenizers-bpe-attack#subdirectory=bindings/python",
 ]
 requires-python = ">=3.12"
 readme = "README.md"
 license = {text = "MIT"}
+
+[tool.pdm]
+distribution = false
 
 [tool.pdm.dev-dependencies]
 dev = [
