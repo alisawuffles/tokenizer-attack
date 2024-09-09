@@ -15,13 +15,6 @@ LLM_NORMALIZERS = {
 
 
 LLM_PRETOKENIZERS = {
-    'bloom': pre_tokenizers.Sequence([
-        Split(
-            pattern=Regex(" ?[^(\\s|[.,!?…。，、।۔،])]+"),
-            behavior='isolated', invert=False
-        ),
-        ByteLevel(add_prefix_space=False, trim_offsets=True, use_regex=False)
-    ]),
     'llama': pre_tokenizers.Sequence([
         Split(
             pattern=Regex(" ?[^\\s\\p{L}\\p{N}]+\\r*"),
