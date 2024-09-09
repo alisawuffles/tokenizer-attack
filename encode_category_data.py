@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from tokenizers import Tokenizer
 import click
+import random
 import os
 from tqdm import tqdm
 from utils import truncate_file
@@ -59,6 +60,7 @@ def main(tokenizer_path: str, lang: str, output_dir: str, corpus_dir: str):
 
     # Keep reading text files until we have num_bytes or run out of files.
     lang_files = [f for f in os.listdir(corpus_dir / lang) if 'truncated' not in f]
+    random.shuffle(lang_files)
     for fname in lang_files:
         filesize = os.path.getsize(corpus_dir / lang / fname)
         if byte_count + filesize <= NUM_BYTES:
@@ -79,7 +81,10 @@ def main(tokenizer_path: str, lang: str, output_dir: str, corpus_dir: str):
             break
 
     with open(output_dir / 'token_byte_counts.json', 'w') as fout:
-        d = {'token_count': token_count, 'byte_count': byte_count}
+        d = {
+            'token_count': token_count,
+            'byte_count': byte_count
+        }
         json.dump(d, fout, indent=5)
 
     print(f'Saved to {output_dir / "token_byte_counts.json"}', flush=True)
