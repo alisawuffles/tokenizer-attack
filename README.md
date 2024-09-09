@@ -8,13 +8,24 @@ Please reach out to jhayase@cs.washington.edu and alisaliu@cs.washington.edu wit
 We use the [Oscar](https://huggingface.co/datasets/oscar-corpus/OSCAR-2301) dataset for mixtures of natural languages, [RedPajama-1T](https://huggingface.co/datasets/togethercomputer/RedPajama-Data-1T) [Github split](https://huggingface.co/datasets/togethercomputer/RedPajama-Data-1T/blob/main/urls/github.txt) for mixtures of programming languages, and [RedPajama-1T](https://huggingface.co/datasets/togethercomputer/RedPajama-Data-1T) for mixtures of domains. You can download a subset of the data from [this Google drive folder](https://drive.google.com/drive/folders/1jF12d_NsuNfVpC9JsAbK215gVYw72gXA?usp=sharing) for quick experimentation. To reproduce the full dataset, please follow the instructions in `preprocessing/`.
 
 # Setting up the environment
-Create a new virtual environment, then install requirements with
+
+**Important note**: our project depends on a custom [fork](https://github.com/alisawuffles/tokenizers-bpe-attack) of [`huggingface/tokenizers`](https://github.com/huggingface/tokenizers) which conflicts with the original.
+Because of this, we recommend *always installing this project in its own virtual environment*.
+
+Our project depends on [Gurobi](https://www.gurobi.com/) and requires a rust compiler to build. You can obtain a free Gurobi academic license [here](https://www.gurobi.com/academia/academic-program-and-licenses/).
+
+## Using Conda
 
 ```
+conda create -n tokenizer-attack python=3.12 rust gurobi::gurobi
+conda activate tokenizer-attack
+# in the project root
 pip install -r requirements.txt
 ```
 
-Note that this includes a custom fork of the HuggingFace `tokenizers` library and a custom priority queue (**TODO JON**)
+## Using [PDM](https://pdm-project.org)
+
+Install rust and Gurobi using your preferred method, then run `pdm install`.
 
 # Reproducing controlled experiments
 There are three steps to reproducing our main experiments, where we train tokenizers on known mixtures of data categories and evaluate our attack's effectiveness at reconstructing the true data mixture.
