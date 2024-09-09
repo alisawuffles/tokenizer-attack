@@ -1,3 +1,9 @@
+"""
+This script will apply a tokenizer's merges one by one to a data corpus, and record the frequencies
+of all possible merges at each time step. Note that only merge counts that *differ* from the previous
+time step are recorded, to save space.
+"""
+
 import os
 from pathlib import Path
 import random
