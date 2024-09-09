@@ -20,6 +20,7 @@ dependencies = [
     "prqrs @ git+https://github.com/PythonNut/prqrs",
     "torch>=2.4.1",
     "tokenizers @ git+https://github.com/alisawuffles/tokenizers-bpe-attack#subdirectory=bindings/python",
+    "ahocorasick-rs>=0.22.0",
 ]
 requires-python = ">=3.12"
 readme = "README.md"

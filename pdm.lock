@@ -5,10 +5,27 @@
 groups = ["default", "dev"]
 strategy = []
 lock_version = "4.5.0"
-content_hash = "sha256:b72b9af1c7f1a4babeb8df9eecb778dce7c3b1a3ad5c759c411723c041b59921"
+content_hash = "sha256:cd504d10520961f1609bc91efa2c39678b39fdc96b6ff1c84ea0c4e7fa58b58d"
 
 [[metadata.targets]]
 requires_python = "==3.12.*"
+
+[[package]]
+name = "ahocorasick-rs"
+version = "0.22.0"
+requires_python = ">=3.8"
+summary = "Search a string for multiple substrings at once"
+dependencies = [
+    "typing-extensions>=4.6.0; python_version < \"3.12\"",
+]
+files = [
+    {file = "ahocorasick_rs-0.22.0-cp312-cp312-macosx_10_12_x86_64.macosx_11_0_arm64.macosx_10_12_universal2.whl", hash = "sha256:b54b7fa8a062cdc3eaf7b7e3ee0254c275480dffec12fea3ed6d753c97bcd1b4"},
+    {file = "ahocorasick_rs-0.22.0-cp312-cp312-macosx_10_12_x86_64.whl", hash = "sha256:b054e76507905df3d4dffcdf1a93d5b3d414a8eaaa2687cfcd372f4053716bd0"},
+    {file = "ahocorasick_rs-0.22.0-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:2ec51b606cbc8c6d5140b94ef197821e33637449be67117d90a81465844f56be"},
+    {file = "ahocorasick_rs-0.22.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:88a46fc8363389adbfc558474b72525891ffa4a14a5acb312f365f458bb42f62"},
+    {file = "ahocorasick_rs-0.22.0-cp312-none-win_amd64.whl", hash = "sha256:34ac0454e04e9b22fa28e457b36e601cb25fecca66e8504fc941fe9eb9cc2425"},
+    {file = "ahocorasick_rs-0.22.0.tar.gz", hash = "sha256:97347038394997298c4a28770aa348791f87ad46e0561ae833526e1c57d6f38f"},
+]
 
 [[package]]
 name = "anyio"
