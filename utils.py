@@ -16,7 +16,7 @@ from tokenizers.models import BPE
 from tokenizers import Tokenizer, pre_tokenizers
 from tokenizers.pre_tokenizers import Digits, ByteLevel
 from tokenizers.trainers import BpeTrainer
-from constants import BASE_VOCABS, LLM_LANGS
+from constants import LLM_LANGS
 from llm_tokenizer_configs import LLM_NORMALIZERS, LLM_PRETOKENIZERS
 
 
@@ -48,18 +48,6 @@ def read_merges_txt(path_to_txt):
         merges = fin.readlines()[1:]
         merges = [m.rsplit("\n", 1)[0] for m in merges]
     return merges
-
-
-def count_chars(text, model_name=None):
-    """
-    For tokenizers that are really *character*-pair encoding, we need to get the size in terms of the base vocabulary.
-    If a character is in the base vocabulary, that adds 1 to the size. Else, it is the number of bytes.
-    """
-    num_chars = 0
-    for t in text:
-        if t in BASE_VOCABS[model_name]:
-            num_chars += 1
-    return num_chars
 
 
 def train_tokenizer_or_dump_frequencies(text_files: str, model_name=None):
