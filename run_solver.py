@@ -299,10 +299,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog="TokenizerInference")
     parser.add_argument("data_root")
     parser.add_argument(
-        "--merges", type=int, help="Number of merges to consider", default=1000
+        "--merges", type=int, help="Number of merges to consider", default=30000
     )
     parser.add_argument(
-        "--denom", type=str, help="Which normalization to apply", default="byte_count"
+        "--denom", type=str, help="Which normalization to apply", default="pairs"
     )
     parser.add_argument(
         "--variant", type=str, help="Which language subdir to run", default=None
@@ -365,5 +365,5 @@ if __name__ == "__main__":
 
     variant_str = "" if args.variant is None else f"_{args.variant}"
     langlist_str = "" if args.langlist is None else f"_{args.langlist}"
-    with (root / f"solution6_{args.denom}_{args.merges}{variant_str}{langlist_str}.json").open("w") as f:
+    with (root / f"solution_{args.denom}_{args.merges}{variant_str}{langlist_str}.json").open("w") as f:
         json.dump(solution, f)
