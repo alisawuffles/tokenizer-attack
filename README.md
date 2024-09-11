@@ -7,6 +7,8 @@ Please reach out to jhayase@cs.washington.edu and alisaliu@cs.washington.edu wit
 # Download data
 We use the [Oscar](https://huggingface.co/datasets/oscar-corpus/OSCAR-2301) dataset for mixtures of natural languages, [RedPajama-1T](https://huggingface.co/datasets/togethercomputer/RedPajama-Data-1T) [Github split](https://huggingface.co/datasets/togethercomputer/RedPajama-Data-1T/blob/main/urls/github.txt) for mixtures of programming languages, and [RedPajama-1T](https://huggingface.co/datasets/togethercomputer/RedPajama-Data-1T) for mixtures of domains. To recreate the dataset, please follow the instructions in `preprocessing/`.
 
+We also provide a subset of our experiment files in a [GitHub release](https://github.com/alisawuffles/tokenizer-attack/releases) for testing and to demonstrate the directory structure.
+
 # Setting up the environment
 
 **Important note**: our project depends on a custom [fork](https://github.com/alisawuffles/tokenizers-bpe-attack) of [`huggingface/tokenizers`](https://github.com/huggingface/tokenizers) which conflicts with the original.
