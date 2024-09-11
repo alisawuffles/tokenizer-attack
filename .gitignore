@@ -170,4 +170,5 @@ encode_flores.py
 encode_text.py
 used_merges
 .virtual_documents
-/data
+/experiments
+/notebooks

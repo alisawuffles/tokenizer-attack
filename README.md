@@ -5,7 +5,7 @@ This repository contains all code for reproducing experiments from the paper [Da
 Please reach out to jhayase@cs.washington.edu and alisaliu@cs.washington.edu with any questions, including if you need help running the attack on new tokenizers.
 
 # Download data
-We use the [Oscar](https://huggingface.co/datasets/oscar-corpus/OSCAR-2301) dataset for mixtures of natural languages, [RedPajama-1T](https://huggingface.co/datasets/togethercomputer/RedPajama-Data-1T) [Github split](https://huggingface.co/datasets/togethercomputer/RedPajama-Data-1T/blob/main/urls/github.txt) for mixtures of programming languages, and [RedPajama-1T](https://huggingface.co/datasets/togethercomputer/RedPajama-Data-1T) for mixtures of domains. You can download a subset of the data from our GitHub release for quick experimentation. To recreate the full dataset, please follow the instructions in `preprocessing/`.
+We use the [Oscar](https://huggingface.co/datasets/oscar-corpus/OSCAR-2301) dataset for mixtures of natural languages, [RedPajama-1T](https://huggingface.co/datasets/togethercomputer/RedPajama-Data-1T) [Github split](https://huggingface.co/datasets/togethercomputer/RedPajama-Data-1T/blob/main/urls/github.txt) for mixtures of programming languages, and [RedPajama-1T](https://huggingface.co/datasets/togethercomputer/RedPajama-Data-1T) for mixtures of domains. To recreate the dataset, please follow the instructions in `preprocessing/`.
 
 # Setting up the environment
 
@@ -32,11 +32,11 @@ There are three steps to reproducing our main experiments, where we train tokeni
 
 1. **Train tokenizers on mixtures of data categories.**
 
-   See `script_examples/train_tokenizer.sh` for an example script. This will create a `merges.txt` and `meta.json` file in the specified output directory (e.g., `experiments/mixed_languages/n_112/0`), as well an empty directory for every data category in the mixture.
+   See `script_examples/train_tokenizer.sh` for an example script. This will create `merges.txt` and `meta.json` file in the specified `output_dir` (e.g., `experiments/mixed_languages/n_112/0`), as well an empty directory for every data category in the mixture.
    
 3. **Apply the learned merge lists to the corpus.**
 
-   This applies the learned merge list step by step to the corpus, recording the frequency of all possible merges at each step. This will create a `all_pair_counts.json` and `meta.json` inside the category subdir (e.g., `experiments/mixed_languages/n_112/0/en`). This needs to be run once for every possible data category; see `script_examples/get_merge_frequencies.sh` for an example script.
+   This applies the learned merge list step by step to the corpus, recording the frequency of all possible merges at each step. This will create `all_pair_counts.json` and `meta.json` inside the category subdir (e.g., `<output_dir>/en`). This needs to be run once for every possible data category; see `script_examples/get_merge_frequencies.sh` for an example script.
    
 3. **Run the solver.**
 
@@ -45,23 +45,23 @@ There are three steps to reproducing our main experiments, where we train tokeni
 In `notebooks/experimental_results.ipynb`, you can find scripts for calculating the mean MSE over test trials and visualizing results.
 
 # Apply our attack to a new, off-the-shelf tokenizer
-Try applying our attack to new tokenizers! Skip step 1 if you are reproducing results on a tokenizer we included. You can also find detailed predictions for the tokenizers we considered in the `solution6_pairs_X.json` files (where `X` is ~30K) in `experiments/llm_tokenizers`.
+Try applying our attack to new tokenizers! Skip step 1 if you are reproducing results on a tokenizer we included. You can also find detailed predictions for the tokenizers we considered in the `solution_pairs_X.json` files (where `X` is ~30K) in `experiments/llm_tokenizers`.
 
 1. **Specify tokenizer configuration.**
 
    Add the normalization and pretokenization configuration for your tokenizer of interest to `llm_tokenizer_configs.py`. If the tokenizer has a `tokenizer.json` available ([example for `GPT-4o`](https://huggingface.co/Xenova/gpt-4o/blob/main/tokenizer.json)), this information can usually be found in the `normalizer` and `pre_tokenizer` fields. Otherwise, you may need to reconstruct the pretokenization rules via manual inspection.
 
-   Some common axes of variation include: (1) Is this a byte-level or character-level tokenizer? (2) Are digits merged with each other? (3) Are punctuation merged with neighboring punctuation, and with neighboring non-punctuation characters? Please see the [`tokenizers.pre_tokenizers`](https://huggingface.co/docs/tokenizers/en/api/pre-tokenizers) documentation to understand the available options. Reconstructing pretokenization rules perfectly is not necessary, but it is helpful so that the set of possible merges considered at every time step by our attack as close as possible to the true set considered during tokenizer training.
+   Some common axes of variation include: (1) Is this a byte-level or character-level tokenizer? (2) Are digits merged with each other? (3) Are punctuation merged with neighboring punctuation, or with neighboring non-punctuation characters? Please see the [`tokenizers.pre_tokenizers`](https://huggingface.co/docs/tokenizers/en/api/pre-tokenizers) documentation to understand the available options. Reconstructing pretokenization rules perfectly is not necessary, but it is helpful so that the set of possible merges considered at every time step by our attack as close as possible to the true set considered during tokenizer training.
    
-3. **Specify the tokenizer's merges.**
+2. **Specify the tokenizer's merges.**
 
-   Create a directory for your tokenizer (e.g., `experiments/llm_tokenizers/gpt4o`) and add the corresponding `merges.txt`. For many tokenizers, this is directly available ([example for `GPT-4o`](https://huggingface.co/Xenova/gpt-4o/blob/main/merges.txt)). Some tokenizers trained with `sentencepiece` may have blocks of redundant merges, which is an artifact of the conversion from the `sentencepiece` to HuggingFace `tokenizers` format (see §C.3); these can be removed with the code in `notebooks/clean_merge_list.ipynb`. Additionally, if you have reason to believe that some merges are manually added by tokenizer creators and not learned organically by the BPE algorithm (e.g., the merges of spaces in `Gemma`'s merge list, see §C.4 for details), then you can remove them manually.
+   Create an `output_dir` for your tokenizer (e.g., `experiments/llm_tokenizers/gpt4o`) and add the corresponding `merges.txt`. For many tokenizers, this is directly available ([example for `GPT-4o`](https://huggingface.co/Xenova/gpt-4o/blob/main/merges.txt)). Some tokenizers trained with `sentencepiece` may have blocks of redundant merges, which is an artifact of the conversion from the `sentencepiece` to HuggingFace `tokenizers` format (see §C.3); these can be removed with the code in `notebooks/clean_merge_list.ipynb`. Additionally, if you have reason to believe that some merges are manually added by tokenizer creators and not learned organically by the BPE algorithm (e.g., the merges of spaces in `Gemma`'s merge list, see §C.4 for details), then you can remove them manually.
    
-4. **Apply the merge list to the corpus.**
+3. **Apply the merge list to the corpus.**
 
-   This applies the learned merge list step by step to the corpus, recording the frequency of all possible merges at each step. This will create a category subdir (e.g., `experiments/llm_tokenizers/gpt4o/en`) and `all_pair_counts.json` and `meta.json` inside the category subdir. This needs to be run once for every possible data category; see `script_examples/get_merge_frequencies_llm.sh` for an example script.
+   This applies the learned merge list step by step to the corpus, recording the frequency of all possible merges at each step. This will create a category subdir (e.g., `<output_dir>/en`) and `all_pair_counts.json` and `meta.json` inside the category subdir. This needs to be run once for every possible data category; see `script_examples/get_merge_frequencies_llm.sh` for an example script.
    
-5. **Run the solver.**
+4. **Run the solver.**
 
    Run `python run_solver.py <output_dir>`. The final predictions can be found in `solution_[options].json` where `[options]` contains the solver parameters.
 
@@ -69,7 +69,7 @@ Try applying our attack to new tokenizers! Skip step 1 if you are reproducing re
 ```
 @misc{hayase-etal-2024-data,
       title={Data Mixture Inference: What do BPE Tokenizers Reveal about their Training Data?}, 
-      author={Jonathan Hayase and Alisa Liu and Yejin Choi and Sewoong Oh and Noah A. Smith},
+      author={Jonathan Hayase* and Alisa Liu* and Yejin Choi and Sewoong Oh and Noah A. Smith},
       year={2024},
       eprint={2407.16607},
       archivePrefix={arXiv},
