@@ -14,12 +14,12 @@ We also provide a subset of our experiment files in a [GitHub release](https://g
 **Important note**: our project depends on a custom [fork](https://github.com/alisawuffles/tokenizers-bpe-attack) of [`huggingface/tokenizers`](https://github.com/huggingface/tokenizers) which conflicts with the original.
 Because of this, we recommend *always installing this project in its own virtual environment*.
 
-Our project depends on [Gurobi](https://www.gurobi.com/) and requires a rust compiler to build. You can obtain a free Gurobi academic license [here](https://www.gurobi.com/academia/academic-program-and-licenses/).
+Our project depends on [Gurobi](https://www.gurobi.com/) and requires rust and C++ compilers to build. You can obtain a free Gurobi academic license [here](https://www.gurobi.com/academia/academic-program-and-licenses/).
 
 ## Using Conda
 
 ```
-conda create -n tokenizer-attack python=3.12 rust gurobi::gurobi
+conda create -n tokenizer-attack python=3.12 rust cxx-compiler gurobi::gurobi
 conda activate tokenizer-attack
 # in the project root
 pip install -r requirements.txt
@@ -27,7 +27,7 @@ pip install -r requirements.txt
 
 ## Using [PDM](https://pdm-project.org)
 
-Install rust and Gurobi using your preferred method, then run `pdm install`.
+Install rust, g++, and Gurobi using your preferred method, then run `pdm install`.
 
 # Reproducing controlled experiments
 There are three steps to reproducing our main experiments, where we train tokenizers on known mixtures of data categories and evaluate our attack's effectiveness at reconstructing the true data mixture.
